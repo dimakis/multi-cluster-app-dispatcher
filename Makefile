@@ -5,6 +5,7 @@ CURRENT_DIR=$(shell pwd)
 GIT_BRANCH:=$(shell git symbolic-ref --short HEAD 2>&1 | grep -v fatal)
 #define the GO_BUILD_ARGS if you need to pass additional arguments to the go build
 GO_BUILD_ARGS?=
+ARCH := $(shell uname -m)
 
 # Reset branch name if this a Travis CI environment
 ifneq ($(strip $(TRAVIS_BRANCH)),)
@@ -76,16 +77,27 @@ ${BIN_DIR}/deepcopy-gen:
 	$(info Compiling deepcopy-gen...)
 	go build -o ${BIN_DIR}/deepcopy-gen ./cmd/deepcopy-gen/
 
+
+# Build the docker image and tag it.  
 images: verify-tag-name generate-code update-deployment-crds
 	$(info List executable directory)
 	$(info repo id: ${git_repository_id})
 	$(info branch: ${GIT_BRANCH})
 	$(info Build the docker image)
-ifeq ($(strip $(GO_BUILD_ARGS)),)
-	docker build --quiet --no-cache --tag mcad-controller:${TAG} -f ${CURRENT_DIR}/Dockerfile  ${CURRENT_DIR}
-else 
-	docker build --no-cache --tag mcad-controller:${TAG} --build-arg GO_BUILD_ARGS=$(GO_BUILD_ARGS) -f ${CURRENT_DIR}/Dockerfile  ${CURRENT_DIR}
-endif		
+	ifeq ($(ARCH),aarch64)
+		ifeq ($(strip $(GO_BUILD_ARGS)),)
+			docker buildx  build --quiet --no-cache --platform=linux/amd64 --tag mcad-controller:${TAG} -f ${CURRENT_DIR}/Dockerfile  ${CURRENT_DIR}
+		else 
+			docker buildx build --no-cache --platform=linux/amd64 --tag mcad-controller:${TAG} --build-arg GO_BUILD_ARGS=$(GO_BUILD_ARGS) -f ${CURRENT_DIR}/Dockerfile  ${CURRENT_DIR}
+		endif	
+	else
+		ifeq ($(strip $(GO_BUILD_ARGS)),)
+			docker build --quiet --no-cache --tag mcad-controller:${TAG} -f ${CURRENT_DIR}/Dockerfile  ${CURRENT_DIR}
+		else 
+			docker build --no-cache --tag mcad-controller:${TAG} --build-arg GO_BUILD_ARGS=$(GO_BUILD_ARGS) -f ${CURRENT_DIR}/Dockerfile  ${CURRENT_DIR}
+		endif	
+	endif
+
 
 images-podman: verify-tag-name generate-code update-deployment-crds
 	$(info List executable directory)
